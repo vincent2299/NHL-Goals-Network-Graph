@@ -3,211 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <title>NHL Goal Network</title>
-    <!-- Import Apache ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; background-color: #050505; color: white; font-family: Arial, sans-serif; overflow: hidden; display: flex; }
-        
-        .sidebar {
-            width: 350px; min-width: 350px; height: 100vh; background: #111; padding: 25px;
-            box-sizing: border-box; border-right: 1px solid #333; z-index: 10;
-        }
-
-        .graph-container { flex-grow: 1; height: 100vh; position: relative; }
+        .sidebar { width: 350px; min-width: 350px; height: 100vh; background: #111; padding: 25px; box-sizing: border-box; border-right: 1px solid #333; z-index: 10; }
+        .graph-container { flex-grow: 1; height: 100vh; }
         #graph { width: 100%; height: 100%; outline: none; }
-
         h1 { margin: 0 0 5px 0; font-size: 24px; color: #3498db; }
-        p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaaaaa; }
+        p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaa; }
         .divider { height: 1px; background: #333; margin: 20px 0; }
-
         input { width: 100%; padding: 12px; margin-bottom: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; outline: none; }
         input:focus { border-color: #3498db; }
-        
-        button, .action-btn {
-            width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; margin-bottom: 10px; transition: 0.2s; text-align: center; display: block; box-sizing: border-box;
-        }
+        button, .action-btn { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; margin-bottom: 10px; transition: 0.2s; text-align: center; display: block; box-sizing: border-box; text-decoration: none; }
         button:hover, .action-btn:hover { background: #2980b9; }
         .longest-btn { background: #9b59b6; }
         .longest-btn:hover { background: #8e44ad; }
         .reset-btn { background: #555; }
         .reset-btn:hover { background: #777; }
-
         #status-box { font-size: 14px; margin-bottom: 15px; padding: 10px; border-radius: 6px; display: none; }
         .error { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
         .success { color: #f1c40f; background: rgba(241, 196, 15, 0.1); }
+        .info { color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
     </style>
 </head>
 <body>
-
     <div class="sidebar">
         <h1>NHL Goal Network</h1>
         <p class="subtitle">Chronological Horseshoe Layout</p>
 
-        <div id="status-box"></div>
-
+        <div id="status-box">
+            {% if error %} <div class="error"><b>Error:</b> {{ error }}</div> {% endif %}
+            {% if path %} <div class="success"><b>Path:</b><br>{{ path | join(' ➔ ') }}</div> {% endif %}
+            {% if clicked %} <div class="info"><b>Inspecting:</b><br>{{ clicked }}</div> {% endif %}
+        </div>
+        
         <div class="divider"></div>
 
-        <!-- Forms no longer refresh the page! -->
-        <form id="search-form">
-            <label style="font-size: 12px; color: #aaa; margin-bottom: 5px; display:block;">Find Path Between Players</label>
-            <input type="text" id="p1" placeholder="Player 1" required>
-            <input type="text" id="p2" placeholder="Player 2" required>
+        <form method="GET" action="/">
+            <label>Find Path Between Players</label>
+            <input type="text" name="p1" placeholder="Player 1" value="{{ request.args.get('p1', '') }}" required>
+            <input type="text" name="p2" placeholder="Player 2" value="{{ request.args.get('p2', '') }}" required>
             <button type="submit">Search Connection</button>
         </form>
 
-        <div class="divider"></div>
+        <form method="GET" action="/">
+            <label>Inspect a Single Player</label>
+            <input type="text" name="clicked" placeholder="Player Name (e.g. Connor McDavid)" required>
+            <button type="submit">Inspect Player</button>
+        </form>
 
-        <button class="action-btn longest-btn" onclick="findLongest()">Find Longest Connection</button>
-        <button class="action-btn reset-btn" onclick="resetGraph()">Clear / Reset Graph</button>
+        <div class="divider"></div>
+        <a href="/?longest=true" class="action-btn longest-btn">Find Longest Connection</a>
+        <a href="/" class="action-btn reset-btn">Clear / Reset Graph</a>
     </div>
 
     <div class="graph-container">
-        <!-- ECharts draws the graph inside this div -->
         <div id="graph"></div>
     </div>
 
     <script>
         var chartDom = document.getElementById('graph');
         var myChart = echarts.init(chartDom);
-        var graphData = null; // Stores original data
+        
+        // THE FIX: This correctly converts the Python dict into a JS object
+        var graphData = {{ graph_data | tojson | safe }};
 
-        // Display messages in the UI
-        function showMessage(msg, isError=false) {
-            var box = document.getElementById('status-box');
-            box.style.display = 'block';
-            box.className = isError ? 'error' : 'success';
-            box.innerHTML = msg;
-        }
-
-        // 1. Fetch the Graph Data from Python on Load
-        fetch('/api/graph_data')
-            .then(response => response.json())
-            .then(data => {
-                graphData = data;
-                renderChart(data.nodes, data.edges);
-            });
-
-        function renderChart(nodes, edges) {
-            var option = {
-                tooltip: {
-                    backgroundColor: 'rgba(20,20,20,0.9)',
-                    borderColor: '#777',
-                    textStyle: { color: '#fff' },
-                    formatter: function (params) {
-                        if (params.dataType === 'node') {
-                            var attr = params.data.attributes;
-                            return `<b style="font-size:16px">${params.data.name}</b><br/>
-                                    <span style="color:#aaa">Role:</span> ${attr.role}<br/>
-                                    <span style="color:#aaa">Debut Year:</span> ${attr.era}<br/>
-                                    <span style="color:#aaa">Goals Involved:</span> ${attr.goals}`;
-                        }
+        var option = {
+            tooltip: {
+                backgroundColor: 'rgba(20,20,20,0.9)',
+                borderColor: '#777',
+                textStyle: { color: '#fff' },
+                formatter: function (params) {
+                    if (params.dataType === 'node') {
+                        var attr = params.data.attributes;
+                        return `<b style="font-size:16px">${params.data.name}</b><br/>
+                                <span style="color:#aaa">Role:</span> ${attr.role}<br/>
+                                <span style="color:#aaa">Debut:</span> ${attr.era}<br/>
+                                <span style="color:#aaa">Goals Involved:</span> ${attr.goals}`;
                     }
-                },
-                series:[{
-                    type: 'graph',
-                    layout: 'none', 
-                    data: nodes,
-                    links: edges,
-                    roam: true, 
-                    label: { show: false },
-                    
-                    // --- OPTIMIZATION 1: Progressive Rendering ---
-                    // Tells the browser to draw 4000 lines per frame to prevent freezing
-                    progressive: 4000,
-                    progressiveThreshold: 2000,
-
-                    itemStyle: { borderColor: '#000', borderWidth: 0.5 },
-                    
-                    lineStyle: {
-                        color: 'source', 
-                        // --- OPTIMIZATION 2: Lower Curveness ---
-                        // 0.1 gives a smooth swoop, but takes 50% less math than 0.2
-                        curveness: 0.1,  
-                        opacity: 0.15, // Made slightly more opaque since there are fewer lines
-                        width: 1
-                    },
-                    
-                    // HOVER ANIMATIONS
-                    emphasis: {
-                        focus: 'adjacency', 
-                        scale: true,        
-                        lineStyle: { width: 3, opacity: 1 }
-                    }
-                }]
-            };
-            myChart.setOption(option);
-        }
-
-        // 2. Handle Search (No Page Reload)
-        document.getElementById('search-form').addEventListener('submit', function(e) {
-            e.preventDefault(); // Stop page from refreshing
-            var p1 = document.getElementById('p1').value;
-            var p2 = document.getElementById('p2').value;
-
-            fetch(`/api/search?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
-                .then(res => res.json())
-                .then(res => {
-                    if (res.error) showMessage("<b>Error:</b> " + res.error, true);
-                    else highlightPath(res.path);
-                });
+                }
+            },
+            series:[{
+                type: 'graph',
+                layout: 'none',
+                data: graphData.nodes,
+                links: graphData.edges,
+                roam: true,
+                label: { show: false },
+                emphasis: { disabled: true }, 
+            }]
+        };
+        myChart.setOption(option);
+        
+        // CLICK HANDLER
+        myChart.on('click', function(params) {
+            if (params.dataType === 'node') {
+                window.location.href = '/?clicked=' + encodeURIComponent(params.data.name);
+            }
         });
 
-        // 3. Handle Longest Path
-        function findLongest() {
-            fetch('/api/longest')
-                .then(res => res.json())
-                .then(res => highlightPath(res.path, "Longest Path in Dataset"));
+        // Show status box if it has content
+        if (document.getElementById('status-box').innerText.trim() !== "") {
+            document.getElementById('status-box').style.display = 'block';
         }
-
-        // 4. Highlight a specific path dynamically
-        function highlightPath(pathArray, title="Connection Found!") {
-            showMessage(`<b>${title}</b><br><br>${pathArray.join(' ➔ ')}`);
-
-            // Modify nodes/edges to highlight the path
-            var newNodes = graphData.nodes.map(function(node) {
-                var isPath = pathArray.includes(node.name);
-                return {
-                    ...node,
-                    itemStyle: { color: isPath ? '#f1c40f' : '#222' },
-                    symbolSize: isPath ? node.symbolSize + 5 : node.symbolSize
-                };
-            });
-
-            var pathEdgesSet = new Set();
-            for(var i=0; i<pathArray.length-1; i++) {
-                pathEdgesSet.add(pathArray[i] + '|' + pathArray[i+1]);
-                pathEdgesSet.add(pathArray[i+1] + '|' + pathArray[i]);
-            }
-
-            var newEdges = graphData.edges.map(function(edge) {
-                var edgeKey = edge.source + '|' + edge.target;
-                var isPath = pathEdgesSet.has(edgeKey);
-                return {
-                    ...edge,
-                    lineStyle: {
-                        color: isPath ? '#f1c40f' : 'rgba(255,255,255,0.02)',
-                        width: isPath ? 4 : 0.5,
-                        opacity: isPath ? 1 : 0.05,
-                        curveness: 0.2
-                    }
-                };
-            });
-
-            // Tell ECharts to update with the highlighted data
-            myChart.setOption({
-                series:[{ data: newNodes, links: newEdges }]
-            });
-        }
-
-        // 5. Reset to default
-        function resetGraph() {
-            document.getElementById('status-box').style.display = 'none';
-            document.getElementById('p1').value = '';
-            document.getElementById('p2').value = '';
-            // Reset with original data
-            renderChart(graphData.nodes, graphData.edges);
-        }
-
     </script>
 </body>
 </html>
