@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NHL Goal Network</title>
+    <style>
+        /* Force true full screen */
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            height: 100%; 
+            width: 100%; 
+            background-color: black; 
+            color: white; 
+            font-family: Arial, sans-serif; 
+            overflow: hidden; 
+        }
+        
+        /* The Plotly graph takes up the whole screen behind the UI */
+        .graph-container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 1; 
+        }
+
+        /* Sleek UI overlay for the search box */
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10; 
+            background: rgba(20, 20, 20, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+            width: 320px;
+        }
+
+        h1 { margin: 0 0 5px 0; font-size: 24px; text-shadow: 2px 2px 4px #000; }
+        p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaaaaa; }
+
+        /* Search Inputs */
+        input {
+            width: 92%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 6px;
+            outline: none;
+        }
+        input:focus {
+            border-color: #3498db;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        /* Search Button */
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-size: 15px;
+        }
+        button:hover { background: #2980b9; }
+
+        /* Dynamic Messages (Error / Success) */
+        .error { color: #e74c3c; font-size: 14px; margin-top: 15px; background: rgba(231, 76, 60, 0.1); padding: 10px; border-radius: 6px;}
+        .success { color: #f1c40f; font-size: 14px; margin-top: 15px; background: rgba(241, 196, 15, 0.1); padding: 10px; border-radius: 6px;}
+        
+        /* Reset View Button */
+        .reset-btn { 
+            margin-top: 15px; 
+            background: #555555; 
+            text-decoration: none; 
+            display: block; 
+            text-align: center; 
+            padding: 10px; 
+            border-radius: 6px; 
+            color: white;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .reset-btn:hover { background: #777777; }
+    </style>
+</head>
+<body>
+
+    <div class="ui-panel">
+        <h1>NHL Goal Network</h1>
+        <p class="subtitle">Find the connection between players</p>
+
+        <!-- Search Form -->
+        <form method="GET" action="/">
+            <input type="text" name="p1" placeholder="Player 1 (e.g. Wayne Gretzky)" required>
+            <input type="text" name="p2" placeholder="Player 2 (e.g. Carey Price)" required>
+            <button type="submit">Find Connection</button>
+        </form>
+
+        <!-- Status Messages passed from Python -->
+        {% if error %}
+            <div class="error"><b>Error:</b> {{ error }}</div>
+        {% endif %}
+
+        {% if path %}
+            <div class="success">
+                <b>Connection Found!</b><br><br>
+                {{ path | join(' ➔ ') }}
+            </div>
+            <a href="/" class="reset-btn">Clear Search</a>
+        {% endif %}
+    </div>
+
+    <!-- The Plotly Graph gets injected here -->
+    <div class="graph-container">
+        {{ graph_html | safe }}
+    </div>
+
+</body>
+</html>
