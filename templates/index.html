@@ -3,156 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <title>NHL Goal Network</title>
+    <!-- Import Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
-        /* Modern Flexbox Layout */
-        body, html { 
-            margin: 0; 
-            padding: 0; 
-            height: 100%; 
-            width: 100%; 
-            background-color: black; 
-            color: white; 
-            font-family: Arial, sans-serif; 
-            overflow: hidden; 
-            display: flex; /* UI on left, Graph on right */
-        }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background-color: #050505; color: white; font-family: Arial, sans-serif; overflow: hidden; display: flex; }
         
-        /* Fixed Sidebar on the Left */
         .sidebar {
-            width: 350px;
-            min-width: 350px;
-            height: 100vh;
-            background: #111;
-            padding: 25px;
-            box-sizing: border-box;
-            border-right: 1px solid #333;
-            overflow-y: auto;
-            z-index: 10;
+            width: 350px; min-width: 350px; height: 100vh; background: #111; padding: 25px;
+            box-sizing: border-box; border-right: 1px solid #333; z-index: 10;
         }
 
-        /* The Graph takes up the remaining space */
-        .graph-container { 
-            flex-grow: 1;
-            height: 100vh;
-            position: relative;
-        }
+        .graph-container { flex-grow: 1; height: 100vh; position: relative; }
+        #graph { width: 100%; height: 100%; outline: none; }
 
         h1 { margin: 0 0 5px 0; font-size: 24px; color: #3498db; }
         p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaaaaa; }
-
-        /* Forms and Buttons */
-        input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 12px;
-            background: #222;
-            border: 1px solid #444;
-            color: white;
-            border-radius: 6px;
-            box-sizing: border-box;
-            outline: none;
-        }
-        input:focus { border-color: #3498db; background: #2a2a2a; }
-        
-        button, .action-btn {
-            width: 100%;
-            padding: 12px;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 15px;
-            display: block;
-            text-align: center;
-            box-sizing: border-box;
-            text-decoration: none;
-            margin-bottom: 10px;
-            transition: 0.2s;
-        }
-        button:hover, .action-btn:hover { background: #2980b9; }
-
-        .longest-btn { background: #9b59b6; }
-        .longest-btn:hover { background: #8e44ad; }
-        
-        .reset-btn { background: #555; margin-top: 20px; }
-        .reset-btn:hover { background: #777; }
-
         .divider { height: 1px; background: #333; margin: 20px 0; }
 
-        /* Status Messages */
-        .error { color: #e74c3c; font-size: 14px; margin-bottom: 15px; background: rgba(231, 76, 60, 0.1); padding: 10px; border-radius: 6px;}
-        .success { color: #f1c40f; font-size: 14px; margin-bottom: 15px; background: rgba(241, 196, 15, 0.1); padding: 10px; border-radius: 6px;}
-        .info { color: #2ecc71; font-size: 14px; margin-bottom: 15px; background: rgba(46, 204, 113, 0.1); padding: 10px; border-radius: 6px;}
+        input { width: 100%; padding: 12px; margin-bottom: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: #3498db; }
+        
+        button, .action-btn {
+            width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; margin-bottom: 10px; transition: 0.2s; text-align: center; display: block; box-sizing: border-box;
+        }
+        button:hover, .action-btn:hover { background: #2980b9; }
+        .longest-btn { background: #9b59b6; }
+        .longest-btn:hover { background: #8e44ad; }
+        .reset-btn { background: #555; }
+        .reset-btn:hover { background: #777; }
+
+        #status-box { font-size: 14px; margin-bottom: 15px; padding: 10px; border-radius: 6px; display: none; }
+        .error { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
+        .success { color: #f1c40f; background: rgba(241, 196, 15, 0.1); }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
         <h1>NHL Goal Network</h1>
-        <p class="subtitle">Interact with the graph or search below.</p>
+        <p class="subtitle">Chronological Horseshoe Layout</p>
 
-        <!-- Status Messages -->
-        {% if error %}
-            <div class="error"><b>Error:</b> {{ error }}</div>
-        {% endif %}
-
-        {% if path %}
-            <div class="success">
-                <b>Connection Path:</b><br><br>
-                {{ path | join(' ➔ ') }}
-            </div>
-        {% endif %}
-
-        {% if clicked %}
-            <div class="info">
-                <b>Viewing Player:</b><br>{{ clicked }}<br><br>
-                <i>Showing direct goal interactions.</i>
-            </div>
-        {% endif %}
+        <div id="status-box"></div>
 
         <div class="divider"></div>
 
-        <form method="GET" action="/">
+        <!-- Forms no longer refresh the page! -->
+        <form id="search-form">
             <label style="font-size: 12px; color: #aaa; margin-bottom: 5px; display:block;">Find Path Between Players</label>
-            <input type="text" name="p1" placeholder="Player 1 (e.g. Sidney Crosby)" required>
-            <input type="text" name="p2" placeholder="Player 2 (e.g. Carey Price)" required>
+            <input type="text" id="p1" placeholder="Player 1" required>
+            <input type="text" id="p2" placeholder="Player 2" required>
             <button type="submit">Search Connection</button>
         </form>
 
         <div class="divider"></div>
 
-        <a href="/?longest=true" class="action-btn longest-btn">Find Longest Connection</a>
-        <a href="/" class="action-btn reset-btn">Clear / Reset Graph</a>
+        <button class="action-btn longest-btn" onclick="findLongest()">Find Longest Connection</button>
+        <button class="action-btn reset-btn" onclick="resetGraph()">Clear / Reset Graph</button>
     </div>
 
     <div class="graph-container">
-        {{ graph_html | safe }}
+        <!-- ECharts draws the graph inside this div -->
+        <div id="graph"></div>
     </div>
 
-    <!-- JAVASCRIPT: Handles clicking on nodes -->
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            // Wait for Plotly to finish injecting into the DOM
-            var checkExist = setInterval(function() {
-                var plotDivs = document.getElementsByClassName('plotly-graph-div');
-                if (plotDivs.length > 0 && plotDivs[0].layout) {
-                    clearInterval(checkExist);
-                    var myPlot = plotDivs[0];
-                    
-                    // When a node is clicked, grab its hidden custom data (Player Name) and refresh the page
-                    myPlot.on('plotly_click', function(data){
-                        if(data.points.length > 0) {
-                            var customData = data.points[0].customdata;
-                            if(customData) {
-                                window.location.href = '/?clicked=' + encodeURIComponent(customData);
-                            }
+        var chartDom = document.getElementById('graph');
+        var myChart = echarts.init(chartDom);
+        var graphData = null; // Stores original data
+
+        // Display messages in the UI
+        function showMessage(msg, isError=false) {
+            var box = document.getElementById('status-box');
+            box.style.display = 'block';
+            box.className = isError ? 'error' : 'success';
+            box.innerHTML = msg;
+        }
+
+        // 1. Fetch the Graph Data from Python on Load
+        fetch('/api/graph_data')
+            .then(response => response.json())
+            .then(data => {
+                graphData = data;
+                renderChart(data.nodes, data.edges);
+            });
+
+        function renderChart(nodes, edges) {
+            var option = {
+                tooltip: {
+                    backgroundColor: 'rgba(20,20,20,0.9)',
+                    borderColor: '#777',
+                    textStyle: { color: '#fff' },
+                    formatter: function (params) {
+                        if (params.dataType === 'node') {
+                            var attr = params.data.attributes;
+                            return `<b style="font-size:16px">${params.data.name}</b><br/>
+                                    <span style="color:#aaa">Role:</span> ${attr.role}<br/>
+                                    <span style="color:#aaa">Debut Year:</span> ${attr.era}<br/>
+                                    <span style="color:#aaa">Goals Involved:</span> ${attr.goals}`;
                         }
-                    });
-                }
-            }, 500); 
+                    }
+                },
+                series:[{
+                    type: 'graph',
+                    layout: 'none', // Uses our Python Horseshoe coordinates
+                    data: nodes,
+                    links: edges,
+                    roam: true, // Allows panning and zooming
+                    label: { show: false },
+                    scaleLimit: { min: 0.5, max: 10 },
+                    
+                    // Style the nodes
+                    itemStyle: { borderColor: '#000', borderWidth: 0.5 },
+                    
+                    // Style the edges (THE CURVES!)
+                    lineStyle: {
+                        color: 'source', // Line takes the color of the shooter
+                        curveness: 0.2,  // Gives it that beautiful swooping arch
+                        opacity: 0.1,
+                        width: 1
+                    },
+                    
+                    // HOVER ANIMATIONS
+                    emphasis: {
+                        focus: 'adjacency', // Dims everything except connected nodes
+                        scale: true,        // Grows the bubble on hover
+                        lineStyle: { width: 3, opacity: 1 }
+                    }
+                }]
+            };
+            myChart.setOption(option);
+        }
+
+        // 2. Handle Search (No Page Reload)
+        document.getElementById('search-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // Stop page from refreshing
+            var p1 = document.getElementById('p1').value;
+            var p2 = document.getElementById('p2').value;
+
+            fetch(`/api/search?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
+                .then(res => res.json())
+                .then(res => {
+                    if (res.error) showMessage("<b>Error:</b> " + res.error, true);
+                    else highlightPath(res.path);
+                });
         });
+
+        // 3. Handle Longest Path
+        function findLongest() {
+            fetch('/api/longest')
+                .then(res => res.json())
+                .then(res => highlightPath(res.path, "Longest Path in Dataset"));
+        }
+
+        // 4. Highlight a specific path dynamically
+        function highlightPath(pathArray, title="Connection Found!") {
+            showMessage(`<b>${title}</b><br><br>${pathArray.join(' ➔ ')}`);
+
+            // Modify nodes/edges to highlight the path
+            var newNodes = graphData.nodes.map(function(node) {
+                var isPath = pathArray.includes(node.name);
+                return {
+                    ...node,
+                    itemStyle: { color: isPath ? '#f1c40f' : '#222' },
+                    symbolSize: isPath ? node.symbolSize + 5 : node.symbolSize
+                };
+            });
+
+            var pathEdgesSet = new Set();
+            for(var i=0; i<pathArray.length-1; i++) {
+                pathEdgesSet.add(pathArray[i] + '|' + pathArray[i+1]);
+                pathEdgesSet.add(pathArray[i+1] + '|' + pathArray[i]);
+            }
+
+            var newEdges = graphData.edges.map(function(edge) {
+                var edgeKey = edge.source + '|' + edge.target;
+                var isPath = pathEdgesSet.has(edgeKey);
+                return {
+                    ...edge,
+                    lineStyle: {
+                        color: isPath ? '#f1c40f' : 'rgba(255,255,255,0.02)',
+                        width: isPath ? 4 : 0.5,
+                        opacity: isPath ? 1 : 0.05,
+                        curveness: 0.2
+                    }
+                };
+            });
+
+            // Tell ECharts to update with the highlighted data
+            myChart.setOption({
+                series:[{ data: newNodes, links: newEdges }]
+            });
+        }
+
+        // 5. Reset to default
+        function resetGraph() {
+            document.getElementById('status-box').style.display = 'none';
+            document.getElementById('p1').value = '';
+            document.getElementById('p2').value = '';
+            // Reset with original data
+            renderChart(graphData.nodes, graphData.edges);
+        }
+
     </script>
 </body>
 </html>
