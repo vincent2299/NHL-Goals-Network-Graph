@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>NHL Goal Network</title>
     <style>
-        /* Force true full screen */
+        /* Modern Flexbox Layout */
         body, html { 
             margin: 0; 
             padding: 0; 
@@ -14,54 +14,47 @@
             color: white; 
             font-family: Arial, sans-serif; 
             overflow: hidden; 
+            display: flex; /* UI on left, Graph on right */
         }
         
-        /* The Plotly graph takes up the whole screen behind the UI */
-        .graph-container { 
-            width: 100vw; 
-            height: 100vh; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            z-index: 1; 
-        }
-
-        /* Sleek UI overlay for the search box */
-        .ui-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10; 
-            background: rgba(20, 20, 20, 0.85);
-            backdrop-filter: blur(10px);
+        /* Fixed Sidebar on the Left */
+        .sidebar {
+            width: 350px;
+            min-width: 350px;
+            height: 100vh;
+            background: #111;
             padding: 25px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
-            width: 320px;
+            box-sizing: border-box;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            z-index: 10;
         }
 
-        h1 { margin: 0 0 5px 0; font-size: 24px; text-shadow: 2px 2px 4px #000; }
+        /* The Graph takes up the remaining space */
+        .graph-container { 
+            flex-grow: 1;
+            height: 100vh;
+            position: relative;
+        }
+
+        h1 { margin: 0 0 5px 0; font-size: 24px; color: #3498db; }
         p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaaaaa; }
 
-        /* Search Inputs */
+        /* Forms and Buttons */
         input {
-            width: 92%;
+            width: 100%;
             padding: 12px;
             margin-bottom: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: #222;
+            border: 1px solid #444;
             color: white;
             border-radius: 6px;
+            box-sizing: border-box;
             outline: none;
         }
-        input:focus {
-            border-color: #3498db;
-            background: rgba(255,255,255,0.1);
-        }
+        input:focus { border-color: #3498db; background: #2a2a2a; }
         
-        /* Search Button */
-        button {
+        button, .action-btn {
             width: 100%;
             padding: 12px;
             background: #3498db;
@@ -70,62 +63,96 @@
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
-            transition: 0.2s;
             font-size: 15px;
-        }
-        button:hover { background: #2980b9; }
-
-        /* Dynamic Messages (Error / Success) */
-        .error { color: #e74c3c; font-size: 14px; margin-top: 15px; background: rgba(231, 76, 60, 0.1); padding: 10px; border-radius: 6px;}
-        .success { color: #f1c40f; font-size: 14px; margin-top: 15px; background: rgba(241, 196, 15, 0.1); padding: 10px; border-radius: 6px;}
-        
-        /* Reset View Button */
-        .reset-btn { 
-            margin-top: 15px; 
-            background: #555555; 
-            text-decoration: none; 
-            display: block; 
-            text-align: center; 
-            padding: 10px; 
-            border-radius: 6px; 
-            color: white;
-            font-weight: bold;
+            display: block;
+            text-align: center;
+            box-sizing: border-box;
+            text-decoration: none;
+            margin-bottom: 10px;
             transition: 0.2s;
         }
-        .reset-btn:hover { background: #777777; }
+        button:hover, .action-btn:hover { background: #2980b9; }
+
+        .longest-btn { background: #9b59b6; }
+        .longest-btn:hover { background: #8e44ad; }
+        
+        .reset-btn { background: #555; margin-top: 20px; }
+        .reset-btn:hover { background: #777; }
+
+        .divider { height: 1px; background: #333; margin: 20px 0; }
+
+        /* Status Messages */
+        .error { color: #e74c3c; font-size: 14px; margin-bottom: 15px; background: rgba(231, 76, 60, 0.1); padding: 10px; border-radius: 6px;}
+        .success { color: #f1c40f; font-size: 14px; margin-bottom: 15px; background: rgba(241, 196, 15, 0.1); padding: 10px; border-radius: 6px;}
+        .info { color: #2ecc71; font-size: 14px; margin-bottom: 15px; background: rgba(46, 204, 113, 0.1); padding: 10px; border-radius: 6px;}
     </style>
 </head>
 <body>
 
-    <div class="ui-panel">
+    <div class="sidebar">
         <h1>NHL Goal Network</h1>
-        <p class="subtitle">Find the connection between players</p>
+        <p class="subtitle">Interact with the graph or search below.</p>
 
-        <!-- Search Form -->
-        <form method="GET" action="/">
-            <input type="text" name="p1" placeholder="Player 1 (e.g. Wayne Gretzky)" required>
-            <input type="text" name="p2" placeholder="Player 2 (e.g. Carey Price)" required>
-            <button type="submit">Find Connection</button>
-        </form>
-
-        <!-- Status Messages passed from Python -->
+        <!-- Status Messages -->
         {% if error %}
             <div class="error"><b>Error:</b> {{ error }}</div>
         {% endif %}
 
         {% if path %}
             <div class="success">
-                <b>Connection Found!</b><br><br>
+                <b>Connection Path:</b><br><br>
                 {{ path | join(' ➔ ') }}
             </div>
-            <a href="/" class="reset-btn">Clear Search</a>
         {% endif %}
+
+        {% if clicked %}
+            <div class="info">
+                <b>Viewing Player:</b><br>{{ clicked }}<br><br>
+                <i>Showing direct goal interactions.</i>
+            </div>
+        {% endif %}
+
+        <div class="divider"></div>
+
+        <form method="GET" action="/">
+            <label style="font-size: 12px; color: #aaa; margin-bottom: 5px; display:block;">Find Path Between Players</label>
+            <input type="text" name="p1" placeholder="Player 1 (e.g. Sidney Crosby)" required>
+            <input type="text" name="p2" placeholder="Player 2 (e.g. Carey Price)" required>
+            <button type="submit">Search Connection</button>
+        </form>
+
+        <div class="divider"></div>
+
+        <a href="/?longest=true" class="action-btn longest-btn">Find Longest Connection</a>
+        <a href="/" class="action-btn reset-btn">Clear / Reset Graph</a>
     </div>
 
-    <!-- The Plotly Graph gets injected here -->
     <div class="graph-container">
         {{ graph_html | safe }}
     </div>
 
+    <!-- JAVASCRIPT: Handles clicking on nodes -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Wait for Plotly to finish injecting into the DOM
+            var checkExist = setInterval(function() {
+                var plotDivs = document.getElementsByClassName('plotly-graph-div');
+                if (plotDivs.length > 0 && plotDivs[0].layout) {
+                    clearInterval(checkExist);
+                    var myPlot = plotDivs[0];
+                    
+                    // When a node is clicked, grab its hidden custom data (Player Name) and refresh the page
+                    myPlot.on('plotly_click', function(data){
+                        if(data.points.length > 0) {
+                            var customData = data.points[0].customdata;
+                            if(customData) {
+                                window.location.href = '/?clicked=' + encodeURIComponent(customData);
+                            }
+                        }
+                    });
+                }
+            }, 500); 
+        });
+    </script>
 </body>
 </html>
