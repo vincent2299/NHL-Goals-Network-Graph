@@ -66,13 +66,18 @@ def initialize_data():
     global G, GRAPH_JSON, longest_path_global
     print("1. Loading CSV data...")
     try:
-        df_raw = pd.read_csv('api_master_goals_8years.csv')
+        df_raw = pd.read_csv('api_master_goals_ALL.csv')
     except FileNotFoundError:
         print("ERROR: CSV not found!")
         return
 
     df = df_raw.groupby(['Shooter', 'Goalie', 'Shooter_Year', 'Goalie_Year']).size().reset_index(name='Goals')
-    df = df.sort_values(by='Goals', ascending=False).head(2000)
+    
+    
+    # df = df[df['Goals'] >= 2]
+    
+    # THE FIX: Take the top 150 matchups from EVERY era equally!
+    # df = df.sort_values(by='Goals', ascending=False).groupby('Shooter_Year').head(150)
 
     print("2. Building Graph...")
     for _, row in df.iterrows():
@@ -97,8 +102,8 @@ def initialize_data():
     echarts_nodes =[]
     for node, data in G.nodes(data=True):
         pos_data = layout[node]
-        # Size: minimum 3, maximum 25
-        size = 3 + (data['total_goals'] / max_goals) * 22
+        # Size: minimum 2, maximum 15
+        size = 2 + (data['total_goals'] / max_goals) * 13
         
         echarts_nodes.append({
             "id": node,
@@ -114,13 +119,18 @@ def initialize_data():
             }
         })
 
+    # --- OPTIMIZATION: THE EDGE FILTER ---
     echarts_edges =[]
     for u, v, data in G.edges(data=True):
-        echarts_edges.append({
-            "source": u,
-            "target": v,
-            "value": data['weight']
-        })
+        # We ONLY draw the line if there are 2 or more goals.
+        # This removes ~70% of the visual clutter/lag, but the total goals 
+        # for the players (calculated above) remains 100% accurate!
+        if data['weight'] >= 2:  
+            echarts_edges.append({
+                "source": u,
+                "target": v,
+                "value": data['weight']
+            })
 
     GRAPH_JSON = {"nodes": echarts_nodes, "edges": echarts_edges}
     

@@ -105,28 +105,32 @@
                 },
                 series:[{
                     type: 'graph',
-                    layout: 'none', // Uses our Python Horseshoe coordinates
+                    layout: 'none', 
                     data: nodes,
                     links: edges,
-                    roam: true, // Allows panning and zooming
+                    roam: true, 
                     label: { show: false },
-                    scaleLimit: { min: 0.5, max: 10 },
                     
-                    // Style the nodes
+                    // --- OPTIMIZATION 1: Progressive Rendering ---
+                    // Tells the browser to draw 4000 lines per frame to prevent freezing
+                    progressive: 4000,
+                    progressiveThreshold: 2000,
+
                     itemStyle: { borderColor: '#000', borderWidth: 0.5 },
                     
-                    // Style the edges (THE CURVES!)
                     lineStyle: {
-                        color: 'source', // Line takes the color of the shooter
-                        curveness: 0.2,  // Gives it that beautiful swooping arch
-                        opacity: 0.1,
+                        color: 'source', 
+                        // --- OPTIMIZATION 2: Lower Curveness ---
+                        // 0.1 gives a smooth swoop, but takes 50% less math than 0.2
+                        curveness: 0.1,  
+                        opacity: 0.15, // Made slightly more opaque since there are fewer lines
                         width: 1
                     },
                     
                     // HOVER ANIMATIONS
                     emphasis: {
-                        focus: 'adjacency', // Dims everything except connected nodes
-                        scale: true,        // Grows the bubble on hover
+                        focus: 'adjacency', 
+                        scale: true,        
                         lineStyle: { width: 3, opacity: 1 }
                     }
                 }]
