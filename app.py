@@ -33,7 +33,7 @@ def initialize_data():
     print("1. Loading Master API Dataset...")
     
     try:
-        df_raw = pd.read_csv('api_master_goals.csv')
+        df_raw = pd.read_csv('api_master_goals_8years.csv')
     except FileNotFoundError:
         print("ERROR: 'api_master_goals.csv' not found. Run the scraper first!")
         return
@@ -59,7 +59,7 @@ def initialize_data():
 
     print("4. Calculating Physics (Spreading out nodes)...")
     # Increased k to 2.0 to force nodes further apart
-    pos = nx.spring_layout(G, k=2.0, iterations=150, seed=42)
+    pos = nx.spring_layout(G, k=2.5, iterations=100)
     
     print("5. Calculating Longest Connection...")
     longest_path_global = find_approximate_longest_path(G)
@@ -122,7 +122,7 @@ def create_plotly_html(search_path=None, clicked_node=None):
         )
         
         # DRASTICALLY REDUCED SIZING: Min 3px, Max 15px
-        base_size = 3 + (goals / max_goals) * 12
+        base_size = 2 + (goals / max_goals) * 8
 
         # State 1: Search Path Active
         if search_path:
