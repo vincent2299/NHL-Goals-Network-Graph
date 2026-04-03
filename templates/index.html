@@ -2,109 +2,293 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NHL Goal Network</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <title>NHL Goal Network | GPU-Powered</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.1/graphology.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
+
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background-color: #050505; color: white; font-family: Arial, sans-serif; overflow: hidden; display: flex; }
-        .sidebar { width: 350px; min-width: 350px; height: 100vh; background: #111; padding: 25px; box-sizing: border-box; border-right: 1px solid #333; z-index: 10; }
-        .graph-container { flex-grow: 1; height: 100vh; }
-        #graph { width: 100%; height: 100%; outline: none; }
-        h1 { margin: 0 0 5px 0; font-size: 24px; color: #3498db; }
-        p.subtitle { margin: 0 0 20px 0; font-size: 14px; color: #aaa; }
-        .divider { height: 1px; background: #333; margin: 20px 0; }
-        input { width: 100%; padding: 12px; margin-bottom: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; outline: none; }
-        input:focus { border-color: #3498db; }
-        button, .action-btn { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; margin-bottom: 10px; transition: 0.2s; text-align: center; display: block; box-sizing: border-box; text-decoration: none; }
-        button:hover, .action-btn:hover { background: #2980b9; }
-        .longest-btn { background: #9b59b6; }
-        .longest-btn:hover { background: #8e44ad; }
-        .reset-btn { background: #555; }
-        .reset-btn:hover { background: #777; }
-        #status-box { font-size: 14px; margin-bottom: 15px; padding: 10px; border-radius: 6px; display: none; }
-        .error { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
-        .success { color: #f1c40f; background: rgba(241, 196, 15, 0.1); }
-        .info { color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; display: flex; }
+        #sidebar { width: 340px; background: #0d0d0d; border-right: 1px solid #222; padding: 25px; z-index: 10; display: flex; flex-direction: column; box-shadow: 5px 0 15px rgba(0,0,0,0.5); }
+        #container { flex-grow: 1; background: #000; position: relative; }
+        
+        h1 { font-size: 20px; color: #3498db; margin: 0 0 5px 0; }
+        .subtitle { font-size: 10px; color: #555; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .input-group { margin-bottom: 15px; }
+        label { font-size: 10px; color: #888; display: block; margin-bottom: 5px; }
+        
+        input { 
+            width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #333; 
+            color: #ffffff !important; border-radius: 6px; box-sizing: border-box; outline: none; 
+        }
+        
+        button { 
+            width: 100%; padding: 12px; background: #3498db; color: #ffffff !important; 
+            border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 5px; 
+        }
+        button:hover { background: #2980b9; }
+        
+        .longest-btn { background: #9b59b6; margin-top: 20px; }
+        .reset-btn { background: #333; margin-top: 10px; }
+
+        #inspect-panel { 
+            margin-top: 30px; padding: 15px; background: #151515; border-radius: 8px; 
+            display: none; border-left: 4px solid #f1c40f; color: #fff;
+        }
+        #path-display { font-size: 12px; color: #f1c40f; line-height: 1.6; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+        
+        /* HOVER TOOLTIP */
+        #tooltip { 
+            position: absolute; display: none; background: #111; color: #fff; 
+            padding: 8px; border-radius: 4px; font-size: 12px; z-index: 1000; 
+            border: 1px solid #3498db; pointer-events: none; 
+        }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 16px; color: #3498db; text-align: center;}
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h1>NHL Goal Network</h1>
-        <p class="subtitle">Chronological Horseshoe Layout</p>
 
-        <div id="status-box">
-            {% if error %} <div class="error"><b>Error:</b> {{ error }}</div> {% endif %}
-            {% if path %} <div class="success"><b>Path:</b><br>{{ path | join(' ➔ ') }}</div> {% endif %}
-            {% if clicked %} <div class="info"><b>Inspecting:</b><br>{{ clicked }}</div> {% endif %}
+    <div id="tooltip"></div>
+
+    <div id="sidebar">
+        <h1>NHL GOAL NETWORK</h1>
+        <div class="subtitle">GPU-Accelerated Universe</div>
+
+        <div class="input-group">
+            <label>INSPECT PLAYER</label>
+            <input type="text" id="search-input" placeholder="e.g. Sidney Crosby">
+            <button onclick="searchPlayer()">Focus Player</button>
         </div>
         
-        <div class="divider"></div>
+        <div class="input-group">
+            <label>PATHFINDER</label>
+            <input type="text" id="p1" placeholder="Start Player">
+            <input type="text" id="p2" placeholder="End Player" style="margin-top:5px;">
+            <button onclick="findPath()">Find Connection</button>
+        </div>
 
-        <form method="GET" action="/">
-            <label>Find Path Between Players</label>
-            <input type="text" name="p1" placeholder="Player 1" value="{{ request.args.get('p1', '') }}" required>
-            <input type="text" name="p2" placeholder="Player 2" value="{{ request.args.get('p2', '') }}" required>
-            <button type="submit">Search Connection</button>
-        </form>
+        <div id="inspect-panel">
+            <div id="inspect-name" style="font-weight: bold; font-size: 16px; color:#fff;"></div>
+            <div id="inspect-details" style="color: #888; font-size: 11px; margin-top: 5px;"></div>
+            <div id="path-display"></div>
+        </div>
 
-        <form method="GET" action="/">
-            <label>Inspect a Single Player</label>
-            <input type="text" name="clicked" placeholder="Player Name (e.g. Connor McDavid)" required>
-            <button type="submit">Inspect Player</button>
-        </form>
-
-        <div class="divider"></div>
-        <a href="/?longest=true" class="action-btn longest-btn">Find Longest Connection</a>
-        <a href="/" class="action-btn reset-btn">Clear / Reset Graph</a>
+        <button class="longest-btn" onclick="findLongest()">Longest Connection</button>
+        <button class="reset-btn" onclick="resetView()">Reset View</button>
     </div>
 
-    <div class="graph-container">
-        <div id="graph"></div>
+    <div id="container">
+        <div id="loading">Connecting to GPU...</div>
     </div>
 
     <script>
-        var chartDom = document.getElementById('graph');
-        var myChart = echarts.init(chartDom);
-        
-        // THE FIX: This correctly converts the Python dict into a JS object
-        var graphData = {{ graph_data | tojson | safe }};
+        let renderer = null;
+        let graph = null;
+        let hoveredNode = null;
+        let selectedNode = null;
+        let activePath = [];
 
-        var option = {
-            tooltip: {
-                backgroundColor: 'rgba(20,20,20,0.9)',
-                borderColor: '#777',
-                textStyle: { color: '#fff' },
-                formatter: function (params) {
-                    if (params.dataType === 'node') {
-                        var attr = params.data.attributes;
-                        return `<b style="font-size:16px">${params.data.name}</b><br/>
-                                <span style="color:#aaa">Role:</span> ${attr.role}<br/>
-                                <span style="color:#aaa">Debut:</span> ${attr.era}<br/>
-                                <span style="color:#aaa">Goals Involved:</span> ${attr.goals}`;
+        const tooltip = document.getElementById('tooltip');
+
+        window.onload = () => init();
+
+        async function init() {
+            try {
+                graph = new graphology.Graph();
+                const response = await fetch('/api/data');
+                const data = await response.json();
+
+                data.nodes.forEach(n => {
+                    if (!graph.hasNode(n.key)) graph.addNode(n.key, n);
+                });
+
+                data.edges.forEach(e => {
+                    if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
+                        if (!graph.hasEdge(e.source, e.target)) {
+                            graph.addEdge(e.source, e.target, { size: 1, color: "#111" });
+                        }
                     }
-                }
-            },
-            series:[{
-                type: 'graph',
-                layout: 'none',
-                data: graphData.nodes,
-                links: graphData.edges,
-                roam: true,
-                label: { show: false },
-                emphasis: { disabled: true }, 
-            }]
-        };
-        myChart.setOption(option);
-        
-        // CLICK HANDLER
-        myChart.on('click', function(params) {
-            if (params.dataType === 'node') {
-                window.location.href = '/?clicked=' + encodeURIComponent(params.data.name);
-            }
-        });
+                });
 
-        // Show status box if it has content
-        if (document.getElementById('status-box').innerText.trim() !== "") {
-            document.getElementById('status-box').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+
+                // --- INITIALIZE RENDERER ---
+                renderer = new Sigma(graph, document.getElementById("container"), {
+                    renderEdgeLabels: false,
+                    labelFont: "Arial",
+                    labelColor: { color: "#ffffff" },
+                    labelBackgroundColor: { color: "transparent" }, // KILL THE BAR
+                    labelSize: 11,
+                    zIndex: true
+                });
+
+                // --- GLOBAL REDUCER (Handles ALL states: Default, Hover, Click, Path) ---
+                renderer.setSetting("nodeReducer", (node, attr) => {
+                    const res = { ...attr, labelBackgroundColor: { color: "transparent" } };
+
+                    // 1. If currently hovering this node
+                    if (node === hoveredNode) {
+                        res.label = attr.label;
+                        res.color = "#f1c40f";
+                        res.size = attr.size + 8; // The "Circle" expand effect
+                        res.zIndex = 999;
+                        res.labelColor = { color: "#ffffff" };
+                        res.labelWeight = "bold"; // BOLD TEXT
+                    }
+
+                    // 2. If node is part of a found path or selected
+                    if (activePath.length > 0) {
+                        if (activePath.includes(node)) {
+                            res.color = "#f1c40f";
+                            res.zIndex = 10;
+                            if (node === selectedNode) res.size = attr.size + 7;
+                        } else {
+                            res.color = "#050505";
+                            res.label = ""; // Hide label for others
+                        }
+                    } else if (selectedNode) {
+                        const neighbors = graph.neighbors(selectedNode);
+                        if (node === selectedNode) {
+                            res.color = "#f1c40f";
+                            res.size = attr.size + 7;
+                            res.zIndex = 10;
+                        } else if (neighbors.includes(node)) {
+                            res.color = "#ffffff";
+                            res.zIndex = 5;
+                        } else {
+                            res.color = "#050505";
+                            res.label = "";
+                        }
+                    }
+
+                    return res;
+                });
+
+                renderer.setSetting("edgeReducer", (edge, attr) => {
+                    if (activePath.length > 0) {
+                        const [u, v] = graph.extremities(edge);
+                        let onPath = false;
+                        for (let i = 0; i < activePath.length - 1; i++) {
+                            if ((u === activePath[i] && v === activePath[i+1]) || (v === activePath[i] && u === activePath[i+1])) onPath = true;
+                        }
+                        return onPath ? { ...attr, color: "#f1c40f", size: 4, zIndex: 10 } : { ...attr, color: "transparent" };
+                    }
+                    if (selectedNode) {
+                        return graph.hasExtremity(edge, selectedNode) ? { ...attr, color: "#ffffff", size: 2, zIndex: 10 } : { ...attr, color: "transparent" };
+                    }
+                    return attr;
+                });
+
+                // --- EVENTS ---
+                renderer.on("enterNode", ({ node }) => {
+                    hoveredNode = node;
+                    const attr = graph.getNodeAttributes(node);
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `<b>${node}</b><br>${attr.role} | Debut: ${attr.year}`;
+                    renderer.refresh();
+                });
+
+                renderer.on("leaveNode", () => {
+                    hoveredNode = null;
+                    tooltip.style.display = 'none';
+                    renderer.refresh();
+                });
+
+                document.getElementById('container').addEventListener('mousemove', e => {
+                    tooltip.style.left = (e.clientX + 15) + 'px';
+                    tooltip.style.top = (e.clientY + 15) + 'px';
+                });
+
+                renderer.on("clickNode", ({ node }) => inspectNode(node));
+
+            } catch (err) {
+                console.error("Init Error:", err);
+                document.getElementById('loading').innerHTML = `<span style="color:#e74c3c">System Error</span>`;
+            }
+        }
+
+        function getShortestPath(start, end) {
+            if (start === end) return [start];
+            let q = [[start]], vis = new Set([start]);
+            while (q.length > 0) {
+                let path = q.shift(), node = path[path.length - 1];
+                for (let nb of graph.neighbors(node)) {
+                    if (nb === end) return [...path, end];
+                    if (!vis.has(nb)) { vis.add(nb); q.push([...path, nb]); }
+                }
+            }
+            return null;
+        }
+
+        function inspectNode(nodeId) {
+            selectedNode = nodeId;
+            activePath = [];
+            const attrs = graph.getNodeAttributes(nodeId);
+            document.getElementById('inspect-panel').style.display = 'block';
+            document.getElementById('inspect-name').innerText = nodeId;
+            document.getElementById('inspect-details').innerHTML = `POSITION: ${attrs.role.toUpperCase()}<br>DEBUT: ${attrs.year}<br>GOALS: ${attrs.goals}`;
+            document.getElementById('path-display').innerText = "";
+            renderer.refresh();
+        }
+
+        function findPath() {
+            const s = document.getElementById('p1').value.trim(), e = document.getElementById('p2').value.trim();
+            if (!graph.hasNode(s) || !graph.hasNode(e)) return alert("Player not found!");
+            activePath = getShortestPath(s, e);
+            if (activePath) {
+                document.getElementById('inspect-panel').style.display = 'block';
+                document.getElementById('inspect-name').innerText = "Connection Found";
+                document.getElementById('path-display').innerHTML = activePath.join("<br>➔ ");
+                renderer.refresh();
+            } else {
+                alert("No path exists.");
+            }
+        }
+
+        function findLongest() {
+            const nodes = graph.nodes();
+            if (nodes.length === 0) return;
+            let visited = new Set(), components = [];
+            nodes.forEach(node => {
+                if (!visited.has(node)) {
+                    let comp = [], stack = [node]; visited.add(node);
+                    while (stack.length > 0) {
+                        let n = stack.pop(); comp.push(n);
+                        graph.neighbors(n).forEach(nb => { if (!visited.has(nb)) { visited.add(nb); stack.push(nb); } });
+                    }
+                    components.push(comp);
+                }
+            });
+            let mainGalaxy = components.sort((a,b) => b.length - a.length)[0];
+            function bfs(s) {
+                let q = [[s, 0]], v = new Set([s]), best = s, maxD = 0;
+                while(q.length > 0) {
+                    let [n, d] = q.shift();
+                    if(d > maxD) { maxD = d; best = n; }
+                    graph.neighbors(n).forEach(nb => { if(!v.has(nb)) { v.add(nb); q.push([nb, d+1]); } });
+                }
+                return best;
+            }
+            let a = bfs(mainGalaxy[0]), b = bfs(a);
+            activePath = getShortestPath(a, b);
+            document.getElementById('inspect-panel').style.display = 'block';
+            document.getElementById('inspect-name').innerText = "Longest Connection";
+            document.getElementById('path-display').innerHTML = activePath.join("<br>➔ ");
+            renderer.refresh();
+        }
+
+        function searchPlayer() {
+            const n = document.getElementById('search-input').value.trim();
+            if (graph.hasNode(n)) inspectNode(n);
+            else alert("Player not found.");
+        }
+
+        function resetView() {
+            selectedNode = null;
+            activePath = [];
+            document.getElementById('inspect-panel').style.display = 'none';
+            renderer.refresh();
         }
     </script>
 </body>

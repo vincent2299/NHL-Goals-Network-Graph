@@ -7,12 +7,16 @@ import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- CONFIGURATION ---
-# We split the scraping into the years BEFORE your current dataset, and AFTER your current dataset.
-SEASONS_TO_SCRAPE = [1997]
+# 1. These are the years we are MISSING (Everything except 2016-2023)
+SEASONS_TO_SCRAPE = list(range(1997, 2016)) + [2024, 2025]
+
+# 2. This is your source file (The 8 years you already have)
 EXISTING_CSV = 'api_master_goals_8years.csv'
+
+# 3. This is the NEW file name for the full history
 OUTPUT_CSV = 'api_master_goals_ALL.csv'
 
-MAX_WORKERS = 12 # Fast but safe
+MAX_WORKERS = 12 
 
 def get_stealth_session():
     session = requests.Session()
@@ -31,116 +35,96 @@ session = get_stealth_session()
 def scrape_game_pbp(game_id):
     url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play"
     try:
-        # Micro-delay: enough to bypass bot-detection, but extremely fast.
         time.sleep(random.uniform(0.01, 0.05))
-        
         resp = session.get(url, timeout=7)
-        if resp.status_code == 404:
-            return None
-        if resp.status_code != 200:
+        if resp.status_code == 404 or resp.status_code != 200:
             return None
             
         data = resp.json()
         season_year = int(str(game_id)[:4])
-        game_goals =[]
+        game_goals = []
         local_names = {}
         
-        for spot in data.get('rosterSpots',[]):
+        for spot in data.get('rosterSpots', []):
             pid = spot.get('playerId')
-            fname = spot.get('firstName', {}).get('default', '') if isinstance(spot.get('firstName'), dict) else spot.get('firstName', '')
-            lname = spot.get('lastName', {}).get('default', '') if isinstance(spot.get('lastName'), dict) else spot.get('lastName', '')
-            local_names[pid] = f"{fname} {lname}".strip()
+            fn = spot.get('firstName', {}).get('default', '') if isinstance(spot.get('firstName'), dict) else spot.get('firstName', '')
+            ln = spot.get('lastName', {}).get('default', '') if isinstance(spot.get('lastName'), dict) else spot.get('lastName', '')
+            local_names[pid] = f"{fn} {ln}".strip()
 
-        for play in data.get('plays',[]):
+        for play in data.get('plays', []):
             if str(play.get('typeDescKey', '')).lower() == 'goal':
                 details = play.get('details', {})
-                shooter_id = details.get('scoringPlayerId')
-                goalie_id = details.get('goalieInNetId')
+                sid = details.get('scoringPlayerId')
+                # Aggressive goalie detection for older API formats
+                gid = details.get('goalieInNetId') or details.get('goalieId')
                 
-                if shooter_id and goalie_id:
+                if sid and gid:
                     game_goals.append({
-                        'Shooter_ID': shooter_id,
-                        'Goalie_ID': goalie_id,
-                        'Shooter': local_names.get(shooter_id, f"Unknown ({shooter_id})"),
-                        'Goalie': local_names.get(goalie_id, f"Unknown ({goalie_id})"),
+                        'Shooter': local_names.get(sid, f"Unknown ({sid})"),
+                        'Goalie': local_names.get(gid, f"Unknown ({gid})"),
                         'Year': season_year
                     })
         return game_goals
-    except Exception as e:
+    except:
         return None
 
-def run_resume_scrape():
+def run_full_history_scrape():
     start_time = time.time()
     
-    # 1. LOAD YOUR EXISTING 8-YEAR DATA
-    print(f"--- 1. LOADING EXISTING DATA ---")
+    # 1. LOAD EXISTING DATA
+    print(f"--- 1. LOADING {EXISTING_CSV} ---")
     try:
         df_existing = pd.read_csv(EXISTING_CSV)
-        print(f"Loaded {len(df_existing)} goals from {EXISTING_CSV}.")
+        # Ensure we use standard columns
+        if 'Year' not in df_existing.columns:
+            df_existing['Year'] = df_existing['Shooter_Year']
     except FileNotFoundError:
-        print(f"ERROR: Could not find {EXISTING_CSV}. Make sure it is in the same folder.")
+        print(f"ERROR: {EXISTING_CSV} not found.")
         return
 
-    # 2. SCRAPE THE MISSING YEARS
-    new_goals =[]
-    print(f"\n--- 2. SCRAPING MISSING SEASONS ---")
+    # 2. SCRAPE MISSING YEARS
+    new_goals = []
+    print(f"\n--- 2. SCRAPING {len(SEASONS_TO_SCRAPE)} MISSING SEASONS ---")
     
     for season in SEASONS_TO_SCRAPE:
-        # Older seasons had fewer games, but 1350 is a safe ceiling to catch everything.
-        game_ids =[int(f"{season}02{g_num:04d}") for g_num in range(1, 1350)]
+        game_ids = [int(f"{season}02{g_num:04d}") for g_num in range(1, 1350)]
         season_total = 0
         
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            future_to_game = {executor.submit(scrape_game_pbp, gid): gid for gid in game_ids}
-            count = 0
-            for future in as_completed(future_to_game):
-                count += 1
+            futures = [executor.submit(scrape_game_pbp, gid) for gid in game_ids]
+            for future in as_completed(futures):
                 res = future.result()
                 if res:
                     new_goals.extend(res)
                     season_total += len(res)
-                
-                if count % 100 == 0:
-                    print(f"[{season}] Checked {count}/{len(game_ids)} games... (Found {season_total} goals)", end='\r')
         
-        print(f"\n[{season}] Finished. Found {season_total} total goals.")
+        print(f"[{season}] Finished. Found {season_total} goals.")
 
     # 3. MERGE AND CLEANUP
-    print("\n--- 3. MERGING AND CALCULATING TRUE ERAS ---")
+    print("\n--- 3. MERGING INTO NEW FILE AND CALCULATING ERAS ---")
     df_new = pd.DataFrame(new_goals)
-    
-    # Ensure Column consistency
-    required_cols = ['Shooter', 'Goalie', 'Shooter_Year', 'Goalie_Year']
-    
-    # --- IF THE NEW DATA IS MISSING YEAR COLUMNS, ADD THEM ---
-    # We assign them the 'Year' value from the scrape for now
-    if 'Shooter_Year' not in df_new.columns:
-        df_new['Shooter_Year'] = df_new['Year']
-        df_new['Goalie_Year'] = df_new['Year']
-        
-    # Combine old data with new data
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     
-    # --- FIX: ROBUST DEBUT YEAR CALCULATION ---
-    # Create a mapping of Name -> Year
-    # We look at every row where this player is a Shooter OR a Goalie
-    shooter_years = df_combined[['Shooter', 'Shooter_Year']].rename(columns={'Shooter': 'Name', 'Shooter_Year': 'Year'})
-    goalie_years = df_combined[['Goalie', 'Goalie_Year']].rename(columns={'Goalie': 'Name', 'Goalie_Year': 'Year'})
+    # Calculate absolute debut year for every name across the entire history
+    debuts = df_combined.groupby('Shooter')['Year'].min().to_dict()
+    # Check goalies too (in case a goalie never scored a goal)
+    goalie_debuts = df_combined.groupby('Goalie')['Year'].min().to_dict()
     
-    # Concat and find the minimum year for every player name
-    debuts = pd.concat([shooter_years, goalie_years]).groupby('Name')['Year'].min().to_dict()
+    # Merge the dictionaries
+    for name, year in goalie_debuts.items():
+        if name not in debuts or year < debuts[name]:
+            debuts[name] = year
 
-    # Re-apply these debut years to every single row in the master file
+    # Apply the True Debut year to every row
     df_combined['Shooter_Year'] = df_combined['Shooter'].map(debuts)
     df_combined['Goalie_Year'] = df_combined['Goalie'].map(debuts)
 
-    # Final sort and save
-    df_combined = df_combined[required_cols]
-    df_combined.to_csv(OUTPUT_CSV, index=False)
+    # Save to the brand new filename
+    df_combined[['Shooter', 'Goalie', 'Shooter_Year', 'Goalie_Year']].to_csv(OUTPUT_CSV, index=False)
     
-    print(f"\nSUCCESS! Ultimate Dataset Created: {OUTPUT_CSV}")
+    print(f"\nSUCCESS! New file created: {OUTPUT_CSV}")
     print(f"Total Combined Goals: {len(df_combined)}")
-    print(f"Time taken to scrape missing years: {round((time.time() - start_time)/60, 2)} minutes.")
+    print(f"Total Scraping Time: {round((time.time() - start_time)/60, 2)} minutes.")
 
 if __name__ == "__main__":
-    run_resume_scrape()
+    run_full_history_scrape()
