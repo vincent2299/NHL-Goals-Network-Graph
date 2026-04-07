@@ -1,10 +1,7 @@
 # 🏒 NHL Goal Network Universe (1997–Present)
 
-<div align="center">
-  <video src="NHL_graph_video.mp4" width="100%" controls autoplay loop muted>
-  </video>
-</div>
 
+<video controls autoplay loop muted src="NHL_graph_video.mp4" title="Title"></video>
 
 An interactive, high-performance network visualization mapping modern NHL history. Inspired by the viral MLB Home Run Network video, this project maps the relationship between **Shooters** and **Goalies** from the dawn of the NHL's digital Play-by-Play era (1997) to today. 
 
