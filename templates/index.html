@@ -87,7 +87,7 @@
         let graph = null;
         let hoveredNode = null;
         let selectedNode = null;
-        let activePath = [];
+        let activePath =[];
 
         const tooltip = document.getElementById('tooltip');
 
@@ -121,61 +121,39 @@
                     labelSize: 11,
                     zIndex: true,
                     
-                    // CUSTOM HOVER RENDERER (Black Label with White Text)
+                    // --- THE FIX: CUSTOM HOVER RENDERER ---
+                    // This explicitly draws the text bold with a drop-shadow, and NO white box
                     hoverRenderer: (context, data, settings) => {
                         const size = settings.labelSize;
                         const font = settings.labelFont;
-                        const padding = 6;
 
-                        // 1. Setup Font to measure width
-                        context.font = `bold ${size}px ${font}`;
-                        const textWidth = context.measureText(data.label).width;
-
-                        // 2. Draw the Black "Pill" Background
-                        context.fillStyle = "#000000"; // Black Fill
-                        context.strokeStyle = "#3498db"; // Blue Border (matching your theme)
-                        context.lineWidth = 1;
-
-                        const x = data.x + data.size + 3;
-                        const y = data.y - size / 2 - padding / 2;
-                        const w = textWidth + padding * 2;
-                        const h = size + padding;
-                        const r = 4; // Rounded corner radius
-
-                        // Draw rounded rectangle
-                        context.beginPath();
-                        context.moveTo(x + r, y);
-                        context.lineTo(x + w - r, y);
-                        context.quadraticCurveTo(x + w, y, x + w, y + r);
-                        context.lineTo(x + w, y + h - r);
-                        context.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-                        context.lineTo(x + r, y + h);
-                        context.quadraticCurveTo(x, y + h, x, y + h - r);
-                        context.lineTo(x, y + r);
-                        context.quadraticCurveTo(x, y, x + r, y);
-                        context.closePath();
+                        // Setup Font (Bold and slightly larger)
+                        context.font = `bold ${size + 1}px ${font}`;
                         
-                        context.fill();
-                        context.stroke();
-
-                        // 3. Draw the White Text on top of the black pill
+                        // Add a slight black shadow so white text is readable over lines
+                        context.shadowColor = "rgba(0, 0, 0, 0.9)";
+                        context.shadowBlur = 4;
+                        
+                        // Draw the White Text (No box drawn!)
                         context.fillStyle = "#ffffff";
-                        context.fillText(data.label, x + padding, data.y + size / 3);
+                        context.fillText(data.label, data.x + data.size + 5, data.y + size / 3);
+                        
+                        // Reset shadow so it doesn't affect other elements
+                        context.shadowBlur = 0;
                     }
                 });
 
                 // --- GLOBAL REDUCER (Handles ALL states: Default, Hover, Click, Path) ---
                 renderer.setSetting("nodeReducer", (node, attr) => {
+                    // Start by ensuring background label box is transparent globally
                     const res = { ...attr, labelBackgroundColor: { color: "transparent" } };
 
                     // 1. If currently hovering this node
                     if (node === hoveredNode) {
                         res.label = attr.label;
-                        res.color = "#f1c40f";
-                        res.size = attr.size + 8; // The "Circle" expand effect
+                        res.color = "#f1c40f"; // Gold color
+                        res.size = attr.size + 8; // THE CIRCLE EXPAND EFFECT
                         res.zIndex = 999;
-                        res.labelColor = { color: "#ffffff" };
-                        res.labelWeight = "bold"; // BOLD TEXT
                     }
 
                     // 2. If node is part of a found path or selected
@@ -264,7 +242,7 @@
 
         function inspectNode(nodeId) {
             selectedNode = nodeId;
-            activePath = [];
+            activePath =[];
             const attrs = graph.getNodeAttributes(nodeId);
             document.getElementById('inspect-panel').style.display = 'block';
             document.getElementById('inspect-name').innerText = nodeId;
@@ -290,7 +268,7 @@
         function findLongest() {
             const nodes = graph.nodes();
             if (nodes.length === 0) return;
-            let visited = new Set(), components = [];
+            let visited = new Set(), components =[];
             nodes.forEach(node => {
                 if (!visited.has(node)) {
                     let comp = [], stack = [node]; visited.add(node);
@@ -326,11 +304,26 @@
         }
 
         function resetView() {
-            selectedNode = null;
-            activePath = [];
-            document.getElementById('inspect-panel').style.display = 'none';
-            renderer.refresh();
-        }
+    // 1. Reset internal memory states
+    selectedNode = null;
+    activePath = [];
+
+    // 2. Hide and wipe the inspect panel
+    document.getElementById('inspect-panel').style.display = 'none';
+    document.getElementById('inspect-name').innerText = "";
+    document.getElementById('inspect-details').innerHTML = "";
+    document.getElementById('path-display').innerHTML = "";
+
+    // 3. Completely clear all search input boxes
+    document.getElementById('search-input').value = "";
+    document.getElementById('p1').value = "";
+    document.getElementById('p2').value = "";
+
+    // 4. Tell the GPU to redraw the default graph state
+    if (renderer) {
+        renderer.refresh();
+    }
+}
     </script>
 </body>
 </html>
